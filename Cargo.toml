@@ -1,0 +1,6 @@
+[package]
+name = "jpeg_decoder"
+version = "0.1.0"
+authors = ["Harry Braviner <harry.braviner@gmail.com>"]
+
+[dependencies]
