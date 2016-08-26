@@ -1,4 +1,6 @@
 #![feature(slice_patterns)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
 
 use std::fs::File;
 use std::io::prelude::*;
@@ -19,6 +21,7 @@ fn main() {
     let file_as_bytes = file_to_bytes(Path::new(input_filename));
 
     // FIXME - implement loop over bytes
+    let markers_and_data = file_as_bytes.map(|bytes| convert_bytes_to_markers(&bytes));
 }
 
 fn file_to_bytes (path : &Path) -> Result<Vec<u8>, std::io::Error> {
@@ -27,6 +30,42 @@ fn file_to_bytes (path : &Path) -> Result<Vec<u8>, std::io::Error> {
         try!(file.read_to_end(&mut bytes));
         Ok(bytes)
     })
+}
+
+// FIXME - should really convert this to an option, propogate errors through correctly
+fn convert_bytes_to_markers (bytes : &Vec<u8>) -> Option<Vec<(Marker, Vec<u8>)>> {
+    let mut bytes_consumed = 0;
+    let mut result = Some(Vec::<(Marker, Vec<u8>)>::new());
+    while bytes_consumed < bytes.len() && result.is_some() {
+        match get_marker_from_bytes(bytes) {
+            None => result = None,  // Failure
+            Some(marker) => {
+                if marker == Marker::StartOfImage || marker == Marker::EndOfImage {
+                    // Special case - these have no length or data segments
+                    result.as_mut().unwrap().push((marker, vec![]));
+                    bytes_consumed += 2;
+                } else {
+                    if bytes_consumed + 4 < bytes.len() {
+                        result = None;  // Not enough room for the data bytes left, must be duff data
+                    } else {
+                        // FIXME - still writing this section
+                        let data_bytes = &bytes[bytes_consumed + 2 .. bytes_consumed + 4];
+                        let data_length = (data_bytes[0] as usize)*256usize + (data_bytes[1] as usize);
+                        bytes_consumed += 4;    // Now counts the marker and length bytes
+                        let remaining_length = bytes.len() - bytes_consumed;
+                        if data_length > remaining_length {
+                            result = None;
+                        } else {
+                            let data = &data_bytes[bytes_consumed .. bytes_consumed + data_length];
+                            result.as_mut().unwrap().push((marker, data.to_vec()));
+                            bytes_consumed += data_length;
+                        }
+                    }
+                }
+            },
+        }
+    }
+    result
 }
 
 #[derive(Debug, PartialEq)]
