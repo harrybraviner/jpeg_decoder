@@ -27,6 +27,18 @@ impl Marker {
             }
         }
     }
+
+    pub fn print_name(&self) -> String {
+        let str = match *self {
+            Marker::DefineHuffmanTable => "DefineHuffmanTable",
+            Marker::StartOfImage => "StartOfImage",
+            Marker::EndOfImage => "EndOfImage",
+            Marker::StartOfScan => "StartOfScan",
+            Marker::DefineQuantizationTable => "DefineQuantizationTable",
+            Marker::Comment => "Comment",
+        };
+        String::from(str)
+    }
 }
 
 #[derive(Debug)]

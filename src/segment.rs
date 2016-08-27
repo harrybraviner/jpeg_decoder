@@ -68,6 +68,15 @@ impl Segment {
             Some(error) => Err(error),
         }
     }
+
+    pub fn summary_string(&self) -> String {
+        let marker_string = self.marker.print_name();
+        let data_sting = match self.data {
+            None => String::from("None"),
+            Some(ref data) => format!("{} bytes", data.len()),
+        };
+        format!("{{ marker : {}, data : {} }}", marker_string, data_sting)
+    }
 }
 
 #[derive(Debug)]
@@ -130,7 +139,7 @@ impl ParseToSegmentsError {
     // Note: Here I need to take ownership of the error, so I can't pass it in as a reference.
     //       But I can't just pass in error : Error, because Error isn't sized.
     fn new(bytes_parsed : usize, segments_parsed : u32, boxed_error : Box<Error>) -> ParseToSegmentsError {
-        let message = String::from(format!("After successfully parsing {} bytes into {} segments, got error: {}", bytes_parsed, segments_parsed, boxed_error));
+        let message = String::from(format!("After successfully parsing {} bytes into {} segments, got error: {}", bytes_parsed, segments_parsed, boxed_error.description()));
         ParseToSegmentsError { message : message, bytes_parsed : bytes_parsed, segments_parsed : segments_parsed, underlying_error : boxed_error }
     }
 }
