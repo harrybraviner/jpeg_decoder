@@ -40,6 +40,34 @@ impl Segment {
         }
             
     }
+
+    pub fn parse_bytes_to_segments(bytes : &[u8]) -> Result<Vec<Segment>, ParseToSegmentsError> {
+        let mut parsed_segments = Vec::<Segment>::new();
+        let mut bytes_parsed = 0;
+        let mut segments_parsed = 0;
+        let mut first_error = None;
+        let bytes_len = bytes.len();
+        while bytes_parsed < bytes.len() && first_error.is_none() {
+            match Segment::read_from_start_of_bytes(&bytes[bytes_parsed..]) {
+                Ok(segment) => {
+                    let segment_length = match segment.data {
+                        Some(ref data) => data.len() + 4,
+                        None => 2,
+                    };
+                    parsed_segments.push(segment);   
+                    bytes_parsed = bytes_parsed + segment_length;
+                    segments_parsed = segments_parsed + 1;
+                },
+                Err(error) => {
+                    first_error = Some(ParseToSegmentsError::new(bytes_parsed, segments_parsed, box(error)));
+                }
+            }
+        }
+        match first_error {
+            None => Ok(parsed_segments),
+            Some(error) => Err(error),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -87,6 +115,39 @@ impl Error for InvalidSegmentError {
 
     fn cause(&self) -> Option<&Error> {
         self.underlying_error.as_ref().map(|boxed_error| &**boxed_error)
+    }
+}
+
+#[derive(Debug)]
+pub struct ParseToSegmentsError {
+    message : String,
+    bytes_parsed : usize,
+    segments_parsed : u32,
+    underlying_error : Box<Error>,
+}
+
+impl ParseToSegmentsError {
+    // Note: Here I need to take ownership of the error, so I can't pass it in as a reference.
+    //       But I can't just pass in error : Error, because Error isn't sized.
+    fn new(bytes_parsed : usize, segments_parsed : u32, boxed_error : Box<Error>) -> ParseToSegmentsError {
+        let message = String::from(format!("After successfully parsing {} bytes into {} segments, got error: {}", bytes_parsed, segments_parsed, boxed_error));
+        ParseToSegmentsError { message : message, bytes_parsed : bytes_parsed, segments_parsed : segments_parsed, underlying_error : boxed_error }
+    }
+}
+
+impl fmt::Display for ParseToSegmentsError {
+    fn fmt(&self, f : &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Invalid segment")
+    }
+}
+
+impl Error for ParseToSegmentsError {
+    fn description(&self) -> &str {
+        &self.message[..]
+    }
+
+    fn cause(&self) -> Option<&Error> {
+        Some(&*self.underlying_error)
     }
 }
 
@@ -197,5 +258,28 @@ mod segment_tests {
 
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), expected_ok);
+    }
+
+    #[test]
+    fn parse_valid_segments() {
+        let bytes = vec![0xffu8, 0xd8u8, 0xffu8, 0xfeu8, 0x00u8, 0x05u8, 0x01u8, 0x23u8, 0x45u8];
+        let result = Segment::parse_bytes_to_segments(&bytes);
+        let expected_segments = vec![Segment { marker : Marker::StartOfImage, data : None },
+                                     Segment { marker : Marker::Comment, data : Some(vec![0x01u8, 0x23u8, 0x45u8]) }];
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), expected_segments);
+
+    }
+
+    #[test]
+    fn parse_invalid_segments() {
+        let bytes = vec![0xffu8, 0xd8u8, 0xffu8, 0xfeu8, 0x00u8, 0x05u8, 0x01u8, 0x23u8];
+        let result = Segment::parse_bytes_to_segments(&bytes);
+        let expected_error = ParseToSegmentsError::new(2, 1, box(InvalidSegmentError::too_few_data_bytes(3, 2)));
+
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().description(), expected_error.description());
+
     }
 }
